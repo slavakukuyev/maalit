@@ -3,6 +3,10 @@ const MAX_FLOOR = 10;
 
 const DEFAULT_FLOOR = 0;
 
+function log(msg) {
+    console.log(new Date().toISOString() + '::: ' + msg);
+}
+
 class Maalit {
     constructor(name) {
         this.name = name;
@@ -20,7 +24,7 @@ class Maalit {
         let temp = this.pressed;
         this.pressed = [...this.pressed, ...[number]];
         if (temp.length !== this.pressed.length) {
-            console.log(`Number ${number} pressed in the LIFT ${this.name}`)
+            log(`Number ${number} pressed in the LIFT ${this.name}`)
         }
         request(this);
     }
@@ -40,23 +44,39 @@ class Maalit {
     }
 
     goDown() {
-        while (this.run && this.floor < MIN_FLOOR) {
+        this.run = true;
+        while (this.run && this.floor > MIN_FLOOR) {
             this.floor--;
+
+            log(this.name + ' LIFT is on the ' + this.floor + ' floor')
             request(this);
         }
 
-        this.direction = 'up'
+
+        if (this.floor === MIN_FLOOR) {
+            this.direction = 'up'
+        } else {
+            return;
+        }
 
         this.stop();
     }
 
     goUp() {
+        this.run = true;
         while (this.run && this.floor < MAX_FLOOR) {
             this.floor++;
+
+            log(this.name + ' LIFT is on the ' + this.floor + ' floor')
             request(this);
         }
 
-        this.direction = 'down';
+        if (this.floor === MAX_FLOOR) {
+            this.direction = 'down';
+        } else {
+            return;
+        }
+
 
         this.stop();
     }
@@ -64,59 +84,54 @@ class Maalit {
     turnLightOn() {
         if (!this.working) {
             this.working = true;
-            console.log('THE LIGHT IS TURNED ON in ' + this.name + ' LIFT');
+            log('THE LIGHT IS TURNED ON in ' + this.name + ' LIFT');
         }
     }
 
     turnLightOff() {
         if (this.working) {
             this.working = false;
-            console.log('THE LIGHT IS TURNED OFF in ' + this.name + ' LIFT');
+            log('THE LIGHT IS TURNED OFF in ' + this.name + ' LIFT');
         }
     }
 
     openTheDoor() {
-        if (!this.opened) {
-            if (this.pressed.length) {
-                const index = this.pressed.indexOf(this.floor);
-                if (index > -1) {
-                    this.pressed.splice(index, 1);
-                }
+        if (this.pressed.length) {
+            const index = this.pressed.indexOf(this.floor);
+            if (index > -1) {
+                this.pressed.splice(index, 1);
             }
-
-            this.turnLightOn()
-
-            console.log('THE DOOR IS OPENING FOR LIFT ' + this.name)
-            this.opened = true;
-
-            if (typeof this.timerCloseTheDoor === 'function') {
-                clearTimeout(this.timerCloseTheDoor);
-            }
-
-            let that = this;
-            this.timerCloseTheDoor = setTimeout(() => {
-                that.closeTheDoor()
-            }, 3000)
         }
+
+        this.turnLightOn()
+
+        log('THE DOOR IS OPENING FOR LIFT ' + this.name + ' on the floor number ' + this.floor)
+        this.opened = true;
+
+        if (this.timerCloseTheDoor) {
+            clearTimeout(this.timerCloseTheDoor);
+        }
+
+        let that = this;
+        this.timerCloseTheDoor = setTimeout(() => {
+            that.closeTheDoor()
+        }, 3000)
     }
 
 
     closeTheDoor() {
         if (this.opened) {
-            console.log('ATTENTION::: THE DOOR IS CLOSING in LIFT ' + this.name);
+            log('ATTENTION::: THE DOOR IS CLOSING in LIFT ' + this.name);
             this.opened = false;
 
-            if (typeof this.timerTurnOffTheLight === 'function') {
-                clearTimeout(this.timerTurnOffTheLight)
+            let that = this;
+            if (that.timerTurnOffTheLight) {
+                clearTimeout(that.timerTurnOffTheLight)
             }
 
-            let that = this;
-            this.timerTurnOffTheLight = setTimeout(() => {
-                if (that.working && !that.run && !directionsUp.length && !directionsDown.length) {
+            that.timerTurnOffTheLight = setTimeout(() => {
+                if (that.working && !that.run && !that.pressed.length && !directionsUp.length && !directionsDown.length) {
                     that.turnLightOff()
-                } else {
-                    console.log('that.run', that.run)
-                    console.log('hat.working', that.working)
                 }
 
             }, 20000)
@@ -137,7 +152,7 @@ var stdin = process.openStdin();
 
 stdin.addListener("data", function (inputData) {
     let info = inputData.toString().trim();
-    console.log("you entered: [" + info + "]");
+    log("you entered: [" + info + "]");
     if (info) {
         pressed_msg(info)
     }
@@ -160,11 +175,11 @@ function pressed_msg(info) {
         return
     }
 
-    console.log('PROGRAMM ERROR::: Invalid BUTTON');
+    log('PROGRAMM ERROR::: Invalid BUTTON');
 }
 
 function floor_pressed_msg(direction, floor) {
-    console.log(`BUTTON ${direction} pressed on the ${floor} floor`);
+    log(`BUTTON ${direction} pressed on the ${floor} floor`);
     setTimeout(request, 1000);
 }
 
@@ -215,22 +230,89 @@ function pressedFloor(params = {}) {
 function request(lift) {
     lift = lift || LIFT;
 
-    switch (true) {
-        case lift.direction === 'up' && directionsUp.indexOf(lift.floor) > -1:
-            lift.stop();
-            lift.openTheDoor();
-            directionsUp.splice(directionsUp.indexOf(lift.floor), 1);
-            delete buttonsPressedUp[lift.floor];
-            break;
-
-        case lift.direction === 'down' && directionsDown.indexOf(lift.floor) > -1:
-            lift.stop();
-            lift.openTheDoor();
-            directionsDown.splice(directionsDown.indexOf(lift.floor), 1);
-            delete buttonsPressedDown[lift.floor];
-
-            break;
+    if ((lift.direction === 'up' && directionsUp.indexOf(lift.floor) > -1)
+        || lift.pressed.indexOf(lift.floor) > -1) {
+        lift.stop();
+        lift.openTheDoor();
+        directionsUp.splice(directionsUp.indexOf(lift.floor), 1);
+        delete buttonsPressedUp[lift.floor];
+        return
     }
+
+    if ((lift.direction === 'down' && directionsDown.indexOf(lift.floor) > -1)
+        || lift.pressed.indexOf(lift.floor) > -1) {
+        lift.stop();
+        lift.openTheDoor();
+        directionsDown.splice(directionsDown.indexOf(lift.floor), 1);
+        delete buttonsPressedDown[lift.floor];
+        return
+    }
+
+
+    if (lift.direction === 'up') {
+        if (lift.pressed.length) {
+            for (let i = 0, l = lift.pressed.length; i < l; i++) {
+                if (lift.pressed[i] > lift.floor) {
+                    lift.goUp();
+                    return;
+                }
+            }
+        }
+
+        if (directionsUp.length) {
+            for (let i = 0, l = directionsUp.length; i < l; i++) {
+                if (directionsUp[i] > lift.floor) {
+                    lift.goUp();
+                    return;
+                }
+            }
+        }
+
+        if (directionsDown.length) {
+            for (let i = 0, l = directionsDown.length; i < l; i++) {
+                if (directionsDown[i] > lift.floor) {
+                    lift.goUp();
+                    return;
+                }
+            }
+        }
+
+        lift.direction = 'down';
+    }
+
+    if (lift.direction === 'down') {
+        if (lift.pressed.length) {
+            for (let i = 0, l = lift.pressed.length; i < l; i++) {
+                if (lift.pressed[i] < lift.floor) {
+                    lift.goDown();
+                    return;
+                }
+            }
+        }
+
+        if (directionsDown.length) {
+            for (let i = 0, l = directionsDown.length; i < l; i++) {
+                if (directionsDown[i] < lift.floor) {
+                    lift.goDown();
+                    return;
+                }
+            }
+        }
+
+        if (directionsUp.length) {
+            for (let i = 0, l = directionsUp.length; i < l; i++) {
+                if (directionsUp[i] < lift.floor) {
+                    lift.goDown();
+                    return;
+                }
+            }
+        }
+
+
+    }
+
+
+
 }
 
 function pressedLift(number) {
